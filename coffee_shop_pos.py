@@ -1,0 +1,189 @@
+import tkinter as tk
+from tkinter import messagebox, ttk
+
+class Coffee:
+    """Encapsulated class to hold base coffee data."""
+    def __init__(self, name, base_price):
+        self.__name = name
+        self.__base_price = base_price
+
+    def get_name(self):
+        return self.__name
+
+    def get_price(self):
+        return self.__base_price
+
+class CombinedCoffeeShopApp:
+    def __init__(self, root, menu):
+        self.root = root
+        self.root.title("Combined Custom Coffee Shop")
+        self.root.geometry("800x850") 
+        self.menu = menu
+        self.cart = {} # Dictionary to hold customized cart items
+
+        # --- Top Label ---
+        tk.Label(root, text="Welcome to Our Custom Coffee Shop!", font=("Arial", 16, "bold")).pack(pady=10)
+
+        # --- Section 1: Drink Customization (From Code 1) ---
+        custom_frame = tk.LabelFrame(root, text="Step 1: Choose Your Customizations", font=("Arial", 12, "bold"), padx=10, pady=10)
+        custom_frame.pack(pady=5, padx=20, fill="x")
+
+        # Size Selection Dropdown
+        tk.Label(custom_frame, text="Select Size:").pack(side="left", padx=5)
+        self.size_var = tk.StringVar(value="Small")
+        size_menu = ttk.Combobox(custom_frame, textvariable=self.size_var, values=["Small", "Medium", "Large"], state="readonly", width=10)
+        size_menu.pack(side="left", padx=5)
+
+        # Extras Text Entry
+        tk.Label(custom_frame, text="Extras (+ $1.00 for vanilla):").pack(side="left", padx=(20, 5))
+        self.extras_entry = tk.Entry(custom_frame, width=25)
+        self.extras_entry.pack(side="left", padx=5)
+
+        # --- Section 2: Menu Grid (From Code 2) ---
+        self.menu_frame = tk.LabelFrame(root, text="Step 2: Select Drink & Add to Cart", font=("Arial", 12, "bold"), padx=10, pady=10)
+        self.menu_frame.pack(pady=10, padx=20, fill="both", expand=True)
+
+        row_count = 0
+        col_count = 0
+        for coffee in self.menu:
+            self.create_coffee_widget(self.menu_frame, coffee, row_count, col_count)
+            col_count += 1
+            if col_count > 4: # Move to the next row after 5 items
+                col_count = 0
+                row_count += 1
+
+        # --- Section 3: Shopping Cart (Combined Logic) ---
+        self.cart_frame = tk.Frame(root, borderwidth=2, relief="sunken")
+        self.cart_frame.pack(pady=15, padx=20, fill="x")
+        self.setup_cart_ui()
+
+    def create_coffee_widget(self, parent, coffee, row, col):
+        """Creates an individual box for each coffee in the grid."""
+        item_frame = tk.Frame(parent, borderwidth=2, relief="groove")
+        item_frame.grid(row=row, column=col, padx=10, pady=10)
+
+        name_label = tk.Label(item_frame, text=coffee.get_name(), font=("Arial", 12, "bold"), width=12, height=2, bg="#eaddcf")
+        name_label.pack(pady=5, padx=5)
+
+        # Display base price
+        tk.Label(item_frame, text=f"Base: ${coffee.get_price():.2f}", font=("Arial", 10), fg="green").pack()
+
+        # Quantity Selector
+        qty_frame = tk.Frame(item_frame)
+        qty_frame.pack(pady=5)
+        tk.Label(qty_frame, text="Qty:").pack(side="left")
+        qty_var = tk.IntVar(value=1)
+        tk.Spinbox(qty_frame, from_=1, to=10, textvariable=qty_var, width=3).pack(side="left")
+
+        # Add Button passes the coffee object and quantity to the logic handler
+        tk.Button(item_frame, text="Add", bg="#4CAF50", fg="white",
+                  command=lambda c=coffee, q=qty_var: self.add_to_cart(c, q.get())).pack(pady=5)
+
+    def setup_cart_ui(self):
+        """Builds the receipt text box and checkout controls."""
+        tk.Label(self.cart_frame, text="Current Orders", font=("Arial", 14, "bold")).pack(pady=5)
+        
+        self.receipt_display = tk.Text(self.cart_frame, height=8, width=70, state="disabled", bg="#f0f0f0")
+        self.receipt_display.pack(pady=5)
+
+        checkout_frame = tk.Frame(self.cart_frame)
+        checkout_frame.pack(fill="x", padx=20, pady=5)
+
+        self.totals_label = tk.Label(checkout_frame, text="Subtotal: $0.00 | Total (w/ Tax): $0.00", font=("Arial", 12, "bold"))
+        self.totals_label.pack(side="left")
+
+        tk.Label(checkout_frame, text="Payment:").pack(side="left", padx=(20, 5))
+        self.payment_var = tk.StringVar(value="Credit Card")
+        payment_combo = ttk.Combobox(checkout_frame, textvariable=self.payment_var, 
+                                     values=["Credit Card", "Cash", "Mobile Pay"], width=12, state="readonly")
+        payment_combo.pack(side="left")
+
+        tk.Button(checkout_frame, text="Checkout", bg="black", fg="white", font=("Arial", 10, "bold"),
+                  command=self.checkout).pack(side="right")
+
+    def add_to_cart(self, coffee, qty):
+        """Calculates final price with customizations and adds to dictionary."""
+        size = self.size_var.get()
+        extras = self.extras_entry.get().strip()
+
+        # 1. Start with the base price
+        price = coffee.get_price()
+        
+        # 2. Add size modifiers
+        if size == "Medium":
+            price += 1.00
+        elif size == "Large":
+            price += 2.00
+        
+        # 3. Add extras modifiers
+        if "vanilla" in extras.lower():
+            price += 1.00
+
+        # 4. Create a unique name so different customizations stack correctly in the cart
+        extra_text = f" (w/ {extras})" if extras else ""
+        custom_name = f"{size} {coffee.get_name()}{extra_text}"
+
+        # 5. Add or update the cart dictionary
+        if custom_name in self.cart:
+            self.cart[custom_name]["qty"] += qty
+        else:
+            self.cart[custom_name] = {"price": price, "qty": qty}
+        
+        # Update UI and clear extras text box for the next drink
+        self.update_cart_display()
+        self.extras_entry.delete(0, tk.END)
+
+    def update_cart_display(self):
+        """Refreshes the receipt display and updates totals."""
+        self.receipt_display.config(state="normal")
+        self.receipt_display.delete(1.0, tk.END)
+        
+        subtotal = 0
+        for custom_name, data in self.cart.items():
+            q = data["qty"]
+            unit_price = data["price"]
+            line_price = unit_price * q
+            subtotal += line_price
+            
+            # Format the output so the prices align nicely
+            self.receipt_display.insert(tk.END, f"{q}x {custom_name:<40} - ${line_price:.2f} (${unit_price:.2f}/ea)\n")
+            
+        self.receipt_display.config(state="disabled")
+
+        # Tax calculation
+        tax_rate = 0.08
+        self.total = subtotal * (1 + tax_rate)
+        self.totals_label.config(text=f"Subtotal: ${subtotal:.2f} | Total (w/ Tax): ${self.total:.2f}")
+
+    def checkout(self):
+        """Processes the final order."""
+        if len(self.cart) == 0:
+            messagebox.showwarning("Empty Cart", "Cannot checkout an empty order.")
+            return
+
+        method = self.payment_var.get()
+        messagebox.showinfo("Checkout Complete", f"Payment of ${self.total:.2f} via {method} was successful!\n\nPreparing your drinks now...")
+        
+        # Clear cart for the next customer
+        self.cart.clear()
+        self.update_cart_display()
+
+if __name__ == "__main__":
+    
+    # Initialize the encapsulated coffee objects with base prices
+    my_menu = [
+        Coffee("Espresso", 2.50),
+        Coffee("Latte", 3.75),
+        Coffee("Cappuccino", 3.50),
+        Coffee("Americano", 2.75),
+        Coffee("Mocha", 4.25),
+        Coffee("Macchiato", 3.25),
+        Coffee("Flat White", 3.80),
+        Coffee("Cold Brew", 4.00),
+        Coffee("Frappuccino", 4.50),
+        Coffee("Affogato", 5.00)
+    ]
+
+    root = tk.Tk()
+    app = CombinedCoffeeShopApp(root, my_menu)
+    root.mainloop()
